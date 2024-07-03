@@ -537,3 +537,115 @@ SELECT NULL, NULL, DEPARTMENT_ID, DEPARTMENT_NAME
 FROM DEPARTMENTS;
 
 -- Лабораторная работа 9
+
+-- 1. Создайте запрос для вывода фамилии, номера отдела и оклада всех служащих, чей номер отдела и оклад совпадают с номером отдела и окладом любого служащего, зарабатывающего комиссионные.
+SELECT e.LAST_NAME, e.DEPARTMENT_ID, e.SALARY
+FROM EMPLOYEES e
+WHERE (e.DEPARTMENT_ID, e.SALARY) IN (SELECT e1.DEPARTMENT_ID, e1.SALARY
+                                      FROM EMPLOYEES e1
+                                      WHERE e1.JOB_ID IN (SELECT JOB_ID
+                                                          FROM JOBS
+                                                          WHERE e1.COMMISSION_PCT IS NOT NULL));
+
+-- 2. Выведите фамилию, название отдела и оклад всех служащих, чей оклад и комиссионные совпадают с окладом и комиссионными любого служащего, работающего в отделе, идентификатор местоположения которого Location_ID = 1700.
+SELECT e.LAST_NAME, d.DEPARTMENT_NAME, e.SALARY
+FROM EMPLOYEES e
+         JOIN DEPARTMENTS d ON e.DEPARTMENT_ID = d.DEPARTMENT_ID
+WHERE EXISTS (SELECT 1
+              FROM EMPLOYEES e2
+                       JOIN DEPARTMENTS d2 ON e2.DEPARTMENT_ID = d2.DEPARTMENT_ID
+              WHERE d2.LOCATION_ID = 1700
+                AND e.SALARY = e2.SALARY
+                AND NVL(e.COMMISSION_PCT, 0) = NVL(e2.COMMISSION_PCT, 0));
+
+-- 3. Создайте запрос для вывода фамилии, даты найма и оклада всех служащих, которые получают такой же оклад и такие же комиссионные, как Kochhar. Не выводите данные о сотруднике Kochhar.
+SELECT e.LAST_NAME, e.HIRE_DATE, e.SALARY
+FROM EMPLOYEES e
+WHERE (e.HIRE_DATE, e.SALARY) IN
+      (SELECT h.HIRE_DATE, h.SALARY
+       FROM EMPLOYEES h
+       WHERE EXISTS
+           (SELECT d.LAST_NAME FROM EMPLOYEES d WHERE d.LAST_NAME = 'Kochhar' AND h.SALARY = d.SALARY)
+         AND h.LAST_NAME <> 'Kochhar')
+
+-- 4. Выведите фамилию, должность и оклад всех служащих, оклад которых превышает оклад каждого клерка торгового менеджера (JOB_ID = ‘SA_MAN’). Отсортируйте результаты по убыванию окладов.
+SELECT LAST_NAME, JOB_ID, SALARY
+FROM EMPLOYEES
+WHERE EMPLOYEES.SALARY > (SELECT MAX(SALARY)
+                          FROM EMPLOYEES
+                          WHERE JOB_ID = 'SA_MAN')
+ORDER BY SALARY DESC;
+
+-- 5. Выведите номера, фамилии и отделы служащих, живущих в городах, названия которых начинаются с буквы Т.
+SELECT e.EMPLOYEE_ID, e.LAST_NAME, e.DEPARTMENT_ID
+FROM EMPLOYEES e
+WHERE EXISTS (SELECT d.DEPARTMENT_ID
+              FROM DEPARTMENTS d
+              WHERE d.LOCATION_ID IN (SELECT l.LOCATION_ID FROM LOCATIONS l WHERE UPPER(SUBSTR(l.CITY, 1, 1)) = 'T'));
+
+-- 6. Напишите запрос для нахождения всех сотрудников, которые зарабатывают больше среднего оклада по их отделу. Выведите фамилию, оклад, номер отдела и средний оклад по отделу. Отсортируйте результаты по средней зарплате. Используйте псевдонимы для выбираемых столбцов.
+SELECT e.LAST_NAME                                                                                              ENAME,
+       e.SALARY,
+       e.DEPARTMENT_ID                                                                                          DEPTNO,
+       TO_CHAR((SELECT AVG(f.SALARY) FROM EMPLOYEES f WHERE f.DEPARTMENT_ID = e.DEPARTMENT_ID), '999999999.00') DEPT_AVG
+FROM EMPLOYEES e
+WHERE (SELECT AVG(f.SALARY) FROM EMPLOYEES f WHERE f.DEPARTMENT_ID = e.DEPARTMENT_ID) < e.SALARY
+ORDER BY DEPT_AVG;
+
+-- 7. Найдите всех сотрудников, не являющихся руководителями. Выполните это с помощью оператора NOT EXIST.
+SELECT e.LAST_NAME
+FROM EMPLOYEES e
+WHERE NOT EXISTS (SELECT m.LAST_NAME FROM EMPLOYEES m WHERE m.MANAGER_ID = e.EMPLOYEE_ID)
+
+-- 8. Может ли это же быть сделано с помощью оператора NOT IN?
+-- нет?
+
+-- 9. Выведите фамилии сотрудников, зарабатывающих меньше среднего оклада по их отделу.
+SELECT e.LAST_NAME
+FROM EMPLOYEES e
+WHERE SALARY IN (SELECT SALARY
+                 FROM EMPLOYEES
+                 WHERE SALARY < (SELECT AVG(m.SALARY) FROM EMPLOYEES m WHERE m.DEPARTMENT_ID = e.DEPARTMENT_ID));
+-- 10. Выведите фамилии сотрудников, у которых есть коллеги по отделу, которые были приняты на работу позже, но имеют более высокий оклад.
+SELECT e.LAST_NAME
+FROM EMPLOYEES e
+WHERE EXISTS (SELECT m.LAST_NAME
+              FROM EMPLOYEES m
+              WHERE m.HIRE_DATE > e.HIRE_DATE
+                AND m.SALARY > e.SALARY
+                AND m.DEPARTMENT_ID = e.DEPARTMENT_ID);
+
+-- 11.	Выведите номера, фамилии и наименования отделов всех сотрудников. Используйте скалярный подзапрос в команде SELECT для вывода наименований отделов.
+SELECT e.EMPLOYEE_ID,
+       e.LAST_NAME,
+       (SELECT d.DEPARTMENT_NAME FROM DEPARTMENTS d WHERE d.DEPARTMENT_ID = e.DEPARTMENT_ID) DEPARTMENT
+FROM EMPLOYEES e;
+
+-- Лабораторная работа 10
+
+-- 1. Напишите отчёт, в котором отражена структура отдела, которым руководит Mourgos. Выведите фамилии, оклады и номер отдела сотрудников.
+SELECT LAST_NAME, SALARY, DEPARTMENT_ID
+FROM EMPLOYEES
+START WITH LAST_NAME = 'Mourgos'
+CONNECT BY PRIOR EMPLOYEE_ID = MANAGER_ID;
+
+-- 2. Создайте отчёт, который показывает иерархию менеджеров, которым подчиняется сотрудник Lorentz. Выведите сначала менеджера, перед которым непосредственно отчитывается Lorentz.
+SELECT LAST_NAME
+FROM EMPLOYEES
+WHERE LAST_NAME <> 'Lorentz'
+START WITH LAST_NAME = 'Lorentz'
+CONNECT BY PRIOR MANAGER_ID = EMPLOYEE_ID;
+
+-- 3. Создайте отчёт с отступом, в котором отражается иерархия управления, начиная с сотрудника по фамилии Kochhar. Выведите фамилии, номера менеджеров и номера отделов сотрудников. Назовите столбцы как показано в примере выходных результатов.
+SELECT RPAD('_', (LEVEL - 1) * 2, '_') || LAST_NAME NAME, MANAGER_ID MGR, DEPARTMENT_ID DEPTNO
+FROM EMPLOYEES
+START WITH LAST_NAME = 'Kochhar'
+CONNECT BY PRIOR EMPLOYEE_ID = MANAGER_ID
+ORDER BY LEVEL;
+
+-- 4. Создайте отчёт, отражающий иерархию управления компанией. Начните с сотрудника самого высокого уровня и исключите из выходных данных всех служащих с идентификатором должности IT_PROG, а также сотрудника De Haan и всех, кто перед ним отчитывается.
+SELECT LAST_NAME NAME, EMPLOYEE_ID, MANAGER_ID
+FROM EMPLOYEES
+START WITH MANAGER_ID IS NULL
+CONNECT BY PRIOR EMPLOYEE_ID = MANAGER_ID
+ORDER BY LEVEL
